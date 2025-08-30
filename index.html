@@ -119,9 +119,9 @@
     </div>
   </body>
   <script>
-    const apiurl_production = "https://api.yaakiyu.f5.si/";
+    // const apiurl_production = "https://api.yaakiyu.f5.si/";
     const apiurl_dev = "http://localhost:80/";
-    let apiurl = apiurl_production;
+    let apiurl = apiurl_dev;
 
     // devサーバーが生きていればapiurlをdevに切り替える
     function tryDevApiUrlSwitch() {
@@ -142,7 +142,7 @@
       const params = new URLSearchParams(window.location.search);
       const orderNum = parseInt(params.get("order") || "", 0);
       const password_ = parseInt(params.get("pw") || "", 0);
-      fetch(apiurl + "mobile/get_status/" + orderNum, {
+      fetch(apiurl + "mobile/get_order/" + orderNum, {
         method: "GET",
         headers: {
           "Content-Type": "application/json",
@@ -161,7 +161,17 @@
         .then((data) => {
           if (data) {
             console.log("Success:", data);
-            document.getElementById("status").innerText = data["status"];
+            // 店名・番号・状況を反映
+            document.querySelector(".store").innerText = data["type"];
+            document.querySelector(".orderNum").innerText = data["id"];
+            document.querySelector(".status").innerText = data["status"];
+
+            // 注文内容を組み立てて反映
+            let itemsHtml = "";
+            for (const [name, count] of Object.entries(data["order_items"])) {
+              itemsHtml += `${name}：${count}個<br/>`;
+            }
+            document.querySelector(".items").innerHTML = itemsHtml;
           } else {
             return;
           }
