@@ -119,8 +119,54 @@
     </div>
   </body>
   <script>
-    function sendRequest(orderNum) {
-      console.log(orderNum, "番目の注文を確認します");
+    const apiurl_production = "https://api.yaakiyu.f5.si/";
+    const apiurl_dev = "http://localhost:80/";
+    let apiurl = apiurl_production;
+
+    // devサーバーが生きていればapiurlをdevに切り替える
+    function tryDevApiUrlSwitch() {
+      fetch(apiurl_dev + "version", { method: "GET", cache: "no-store" })
+        .then((res) => {
+          if (res.ok) {
+            apiurl = apiurl_dev;
+            console.warn("apiurlを開発環境に切り替えました");
+          }
+        })
+        .catch(() => {
+          // devサーバーが落ちている場合は何もしない
+        });
+    }
+    tryDevApiUrlSwitch();
+
+    function sendRequest() {
+      const params = new URLSearchParams(window.location.search);
+      const orderNum = parseInt(params.get("order") || "", 0);
+      const password_ = parseInt(params.get("pw") || "", 0);
+      fetch(apiurl + "mobile/get_status/" + orderNum, {
+        method: "GET",
+        headers: {
+          "Content-Type": "application/json",
+          password: password_,
+        },
+      })
+        .then(async (response) => {
+          if (response.status === 200) {
+            return response.json();
+          } else {
+            console.error("Error:", response.text());
+            alert("注文中にエラーが発生しました。");
+            return null;
+          }
+        })
+        .then((data) => {
+          if (data) {
+            console.log("Success:", data);
+            document.getElementById("status").innerText = data["status"];
+          } else {
+            return;
+          }
+        });
+      console.log(orderNum, password_, "番目の注文を確認します");
     }
     function hashchanged(hash) {
       const now = Date.now();
@@ -143,7 +189,7 @@
       ).toLocaleString("ja-JP", { hour12: false });
       document.getElementsByClassName("orderNum")[0].innerText =
         location.hash.substring(1);
-      if (location.hash.substring(1) != "") {
+      if (location.hash.substring(1) != "" || true) {
         sendRequest(location.hash.substring(1));
         document.getElementById("root").style.display = "none";
         document.getElementById("status").style.display = "block";
@@ -153,16 +199,16 @@
       }
     }
     window.addEventListener("hashchange", () => {
-      hashchanged(location.hash);
+      hashchanged();
     });
     window.addEventListener("DOMContentLoaded", () => {
       // ページ読み込み時の初期値を表示
-      hashchanged(location.hash);
+      hashchanged();
 
       // 🔽 再読み込みボタン処理
       document.getElementById("reload-btn").addEventListener("click", () => {
         console.log("再読み込み");
-        hashchanged(location.hash);
+        hashchanged();
       });
     });
   </script>
