@@ -247,6 +247,16 @@
               classDatas[data["user"]].store;
             document.querySelector(".orderNum").innerText = data["id"];
             document.querySelector(".status").innerText = data["status"];
+            if(data["status"]==="呼び出し待ち"){
+              //Todo:待ち人数表示 data["wait_number"]
+            }
+            else if(data["status"]==="キャンセル済み"){
+              
+            }
+            else{
+              //elseで繋いでいるが、他のステータスに対応するにはきちんと全部列挙したほうがよい
+              document.querySelector(".status").innerText = "呼び出し中";
+            }
 
             // 注文内容を組み立てて反映
             let itemsHtml = "";
