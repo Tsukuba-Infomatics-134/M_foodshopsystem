@@ -138,6 +138,87 @@
     }
     tryDevApiUrlSwitch();
 
+    const classDatas = [
+      {}, // 管理者用
+      {
+        // 1組
+        store: "ベビカスの焼き方",
+        variety: 2,
+        title: ["ベビーカステラ(プレーン)", "ベビーカステラ(抹茶)"],
+        explain: ["ただのベビカス", "少し違うベビカス"],
+        picture: ["", ""],
+        price: [100, 100],
+        limit: 10,
+        bgimage:
+          "https://illust.download/wp-content/uploads/2017/11/background134.jpg",
+      },
+      {
+        // 2組
+        store: "桐頌堀",
+        variety: 2,
+        title: ["お好み焼き(プレーン)", "お好み焼き(チーズ入り)"],
+        explain: ["ただのお好み焼き", "少し黄色いお好み焼き"],
+        picture: ["", ""],
+        price: [100, 100],
+        limit: 10,
+        bgimage:
+          "https://illust.download/wp-content/uploads/2017/11/background137.jpg",
+      },
+
+      {
+        // 3組
+        store: "だんご3-3兄弟",
+        variety: 2,
+        title: ["みたらしきなこ団子", "カラフルあんこ団子"],
+        explain: ["みたらし (きなこトッピング可能)", "あんこ"],
+        picture: ["", ""],
+        price: [100, 100],
+        limit: 10,
+        bgimage:
+          "https://illust.download/wp-content/uploads/2017/11/background135.jpg",
+      },
+      {
+        // 4組
+        store: "もりてつフローズンパラダイス",
+        variety: 2,
+        title: ["かき氷(抹茶白玉小豆)", "かき氷(マンゴー)"],
+        explain: ["抹茶味で白玉と小豆があるやつ", "マンゴー味"],
+        picture: ["", ""],
+        price: [100, 100],
+        limit: 10,
+        bgimage:
+          "https://illust.download/wp-content/uploads/2017/11/background138.jpg",
+      },
+      {
+        // 5組
+        store: "じゃがいもだけじゃだめですか",
+        variety: 2,
+        title: [
+          "シャカシャカポテト(コンソメ)",
+          "シャカシャカポテト(バター醤油)",
+        ],
+        explain: ["うまい", "うまい"],
+        picture: ["", ""],
+        price: [200, 200],
+        limit: 10,
+        bgimage:
+          "https://illust.download/wp-content/uploads/2017/11/background136.jpg",
+      },
+
+      {
+        // 6組
+        store: "ひっぱりだこ",
+        variety: 2,
+        title: ["たこ焼き", "たこ焼き(明太もちチーズ)"],
+        explain: ["通常", "突然変異"],
+        picture: ["", ""],
+        price: [100, 100],
+        limit: 10,
+        bgimage:
+          "https://illust.download/wp-content/uploads/2017/11/background133.jpg",
+      },
+    ];
+
     function sendRequest() {
       const params = new URLSearchParams(window.location.search);
       const orderNum = parseInt(params.get("order") || "", 0);
@@ -162,15 +243,20 @@
           if (data) {
             console.log("Success:", data);
             // 店名・番号・状況を反映
-            document.querySelector(".store").innerText = data["type"];
+            document.querySelector(".store").innerText =
+              classDatas[data["user"]].store;
             document.querySelector(".orderNum").innerText = data["id"];
             document.querySelector(".status").innerText = data["status"];
 
             // 注文内容を組み立てて反映
             let itemsHtml = "";
-            for (const [name, count] of Object.entries(data["order_items"])) {
-              itemsHtml += `${name}：${count}個<br/>`;
-            }
+            itemsHtml += `${classDatas[data["user"]].title[0]}：${
+              data["order_items"]["item_1"]
+            }個<br/>`;
+            itemsHtml += `${classDatas[data["user"]].title[1]}：${
+              data["order_items"]["item_2"]
+            }個<br/>`;
+
             document.querySelector(".items").innerHTML = itemsHtml;
           } else {
             return;
