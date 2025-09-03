@@ -206,7 +206,7 @@
     function sendRequest() {
       const params = new URLSearchParams(window.location.search);
       const orderNum = parseInt(params.get("order") || "", 0);
-      const password_ = parseInt(params.get("pw") || "", 0);
+      const password_ = params.get("pw") || "";
       fetch(apiurl + "mobile/get_order/" + orderNum, {
         method: "GET",
         headers: {
