@@ -120,23 +120,7 @@
   </body>
   <script>
     const apiurl_production = "https://api.yaakiyu.f5.si/";
-    const apiurl_dev = "http://localhost:80/";
     let apiurl = apiurl_production;
-
-    // devサーバーが生きていればapiurlをdevに切り替える
-    function tryDevApiUrlSwitch() {
-      fetch(apiurl_dev + "version", { method: "GET", cache: "no-store" })
-        .then((res) => {
-          if (res.ok) {
-            apiurl = apiurl_dev;
-            console.warn("apiurlを開発環境に切り替えました");
-          }
-        })
-        .catch(() => {
-          // devサーバーが落ちている場合は何もしない
-        });
-    }
-    tryDevApiUrlSwitch();
 
     const classDatas = [
       {}, // 管理者用
