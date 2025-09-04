@@ -8,7 +8,7 @@
       body {
         font-family: sans-serif;
         text-align: center;
-        padding: 40px 20px;
+        padding: 20px;
       }
       h1 {
         font-size: 2em;
@@ -17,7 +17,7 @@
       h2 {
         font-size: 1.2em;
         font-weight: normal;
-        margin-bottom: 2em;
+        margin-bottom: 1em;
       }
       input {
         font-size: 1.2em;
@@ -40,20 +40,6 @@
       }
       button:hover {
         background-color: #bfbfbf;
-      }
-      body {
-        font-family: sans-serif;
-        text-align: center;
-        padding: 20px;
-      }
-      h1 {
-        font-size: 2em;
-        margin-bottom: 0.2em;
-      }
-      h2 {
-        font-size: 1.2em;
-        font-weight: normal;
-        margin-bottom: 1em;
       }
       .store {
         font-size: 1.2em;
@@ -104,7 +90,7 @@
       <div class="store">桐頌堀　（2組）</div>
       <button id="reload-btn">再読み込み</button>
       <div class="ordertext">受付番号</div>
-      <div class="orderNum">123</div>
+      <div class="orderNum">読み込み中...</div>
 
       <div class="label">呼び出し状況</div>
       <div class="status">まだです</div>
@@ -119,7 +105,7 @@
     </div>
   </body>
   <script>
-    const apiurl_production = "https://api.yaakiyu.f5.si/";
+    const apiurl_production = "https://didactic-space-bassoon-r4wxv7xv79w4cj5g-80.app.github.dev/";
     let apiurl = apiurl_production;
 
     const classDatas = [
@@ -203,106 +189,175 @@
       },
     ];
 
-    function sendRequest() {
-      const params = new URLSearchParams(window.location.search);
-      const orderNum = parseInt(params.get("order") || "", 0);
-      const password_ = params.get("pw") || "";
-      fetch(apiurl + "mobile/get_order/" + orderNum, {
-        method: "GET",
+    function updateDisplay(data) {
+      if (!data || !data.user || !classDatas[data.user]) {
+        // データがないか、ユーザー情報が不正な場合は何もしない
+        return;
+      }
+      // 店名・番号・状況を反映
+      document.querySelector(".store").innerText =
+        classDatas[data["user"]].store;
+      document.querySelector(".orderNum").innerText = data["id"];
+      
+      let statusText = data["status"];
+      if (statusText === "呼び出し待ち") {
+        // TODO: 待ち人数表示 data["wait_number"] を使う
+        statusText = "呼び出し待ち";
+      } else if (statusText === "調理中") {
+        statusText = "調理中";
+      } else if (statusText === "提供待ち") {
+        statusText = "お渡しできます";
+      } else if (statusText === "完了") {
+        statusText = "お渡し済み";
+      } else if (statusText === "キャンセル済み") {
+        statusText = "キャンセル済み";
+      } else {
+        statusText = "呼び出し中"; // 不明なステータスの場合
+      }
+      document.querySelector(".status").innerText = statusText;
+
+      // 注文内容を組み立てて反映
+      let itemsHtml = "";
+      const userClassData = classDatas[data["user"]];
+      if (data.order_items && userClassData) {
+        itemsHtml += `${userClassData.title[0]}：${
+          data.order_items["item_1"] || 0
+        }個<br/>`;
+        itemsHtml += `${userClassData.title[1]}：${
+          data.order_items["item_2"] || 0
+        }個<br/>`;
+      }
+      document.querySelector(".items").innerHTML = itemsHtml;
+    }
+
+    const cacheName = "order-cache";
+
+    async function updateCache(orderNum, password_) {
+      const requestUrl = `${apiurl}mobile/get_order/${orderNum}`;
+      const request = new Request(requestUrl, {
         headers: {
           "Content-Type": "application/json",
           password: password_,
         },
-      })
-        .then(async (response) => {
-          if (response.status === 200) {
-            return response.json();
-          } else if(response.status===404){
-            console.error("Error:", response.text());
-            alert("注文番号が間違っています");
-            return null;
-          } else if(response.status===403){
-            console.error("Error:", response.text());
-            alert("パスワードが間違っています");
-            return null;
-          }
-        })
-        .then((data) => {
-          if (data) {
-            console.log("Success:", data);
-            // 店名・番号・状況を反映
-            document.querySelector(".store").innerText =
-              classDatas[data["user"]].store;
-            document.querySelector(".orderNum").innerText = data["id"];
-            document.querySelector(".status").innerText = data["status"];
-            if(data["status"]==="呼び出し待ち"){
-              //Todo:待ち人数表示 data["wait_number"]
-            }
-            else if(data["status"]==="キャンセル済み"){
-              
-            }
-            else{
-              //elseで繋いでいるが、他のステータスに対応するにはきちんと全部列挙したほうがよい
-              document.querySelector(".status").innerText = "呼び出し中";
-            }
+      });
 
-            // 注文内容を組み立てて反映
-            let itemsHtml = "";
-            itemsHtml += `${classDatas[data["user"]].title[0]}：${
-              data["order_items"]["item_1"]
-            }個<br/>`;
-            itemsHtml += `${classDatas[data["user"]].title[1]}：${
-              data["order_items"]["item_2"]
-            }個<br/>`;
+      try {
+        const reloadBtn = document.getElementById("reload-btn");
+        reloadBtn.disabled = true;
 
-            document.querySelector(".items").innerHTML = itemsHtml;
+        const response = await fetch(request);
+        if (!response.ok) {
+          if (response.status === 404) {
+            alert("注文番号が見つかりません。");
+          } else if (response.status === 403) {
+            alert("パスワードが間違っています。");
           } else {
-            return;
+            const errorText = await response.text();
+            console.error("Error:", errorText);
+            alert("エラーが発生しました。しばらくしてから再試行してください。");
           }
-        });
-      console.log(orderNum, password_, "番目の注文を確認します");
-    }
-    function hashchanged(hash) {
-      const now = Date.now();
-      const lastRequestTime = parseInt(localStorage.getItem("pre_time") || "0");
-      document.getElementById("last-updated").innerText = new Date(
-        lastRequestTime
-      ).toLocaleString("ja-JP", { hour12: false });
-      if (now - lastRequestTime < 10000) {
-        //キャッシュに前回のデータを残しておいて、それを表示する
-        console.log(lastRequestTime);
-        console.log(now - lastRequestTime);
-        console.log("Toooooooo many request");
-        document.getElementById("root").style.display = "none";
-        document.getElementById("status").style.display = "block";
-        return;
+          reloadBtn.disabled = false; // エラー時はボタンを再度有効化
+          return null;
+        }
+
+        const cache = await caches.open(cacheName);
+        await cache.put(request, response.clone()); // レスポンスをキャッシュに保存
+
+        const data = await response.json();
+        console.log("Success (from network):", data);
+        updateDisplay(data);
+        document.getElementById("last-updated").innerText = new Date().toLocaleString("ja-JP", { hour12: false });
+        
+        setTimeout(() => {
+            reloadBtn.disabled = false;
+        }, 10000); // 10秒後にボタンを有効化
+
+        return data;
+      } catch (error) {
+        console.error("Fetch error:", error);
+        alert("ネットワークエラーが発生しました。");
+        document.getElementById("reload-btn").disabled = false; // エラー時はボタンを再度有効化
+        return null;
       }
-      localStorage.setItem("pre_time", now);
-      document.getElementById("last-updated").innerText = new Date(
-        now
-      ).toLocaleString("ja-JP", { hour12: false });
-      document.getElementsByClassName("orderNum")[0].innerText =
-        location.hash.substring(1);
-      if (location.hash.substring(1) != "" || true) {
-        sendRequest(location.hash.substring(1));
-        document.getElementById("root").style.display = "none";
-        document.getElementById("status").style.display = "block";
-      } else {
+    }
+
+    async function loadFromCacheOrFetch() {
+      const params = new URLSearchParams(window.location.search);
+      const orderNum = params.get("order");
+      const password_ = params.get("pw") || "";
+
+      if (!orderNum) {
         document.getElementById("root").style.display = "block";
         document.getElementById("status").style.display = "none";
+        return;
       }
-    }
-    window.addEventListener("hashchange", () => {
-      hashchanged();
-    });
-    window.addEventListener("DOMContentLoaded", () => {
-      // ページ読み込み時の初期値を表示
-      hashchanged();
 
-      // 🔽 再読み込みボタン処理
-      document.getElementById("reload-btn").addEventListener("click", () => {
-        console.log("再読み込み");
-        hashchanged();
+      document.getElementById("root").style.display = "none";
+      document.getElementById("status").style.display = "block";
+
+      const requestUrl = `${apiurl}mobile/get_order/${orderNum}`;
+      const request = new Request(requestUrl, {
+        headers: { "Content-Type": "application/json", password: password_ },
+      });
+
+      const cache = await caches.open(cacheName);
+      const cachedResponse = await cache.match(request);
+
+      if (cachedResponse) {
+        const cachedTime = new Date(cachedResponse.headers.get("date")).getTime();
+        const now = Date.now();
+        document.getElementById("last-updated").innerText = new Date(cachedTime).toLocaleString("ja-JP", { hour12: false });
+
+        if (now - cachedTime < 10000) {
+          console.log("Request throttled. Loading from cache.");
+          const data = await cachedResponse.json();
+           if (data.id == orderNum) {
+              updateDisplay(data);
+              const reloadBtn = document.getElementById("reload-btn");
+              reloadBtn.disabled = true;
+              setTimeout(() => {
+                  reloadBtn.disabled = false;
+              }, 10000 - (now - cachedTime));
+              return; //キャッシュ表示したので終了
+           }
+        }
+      }
+      
+      updateCache(orderNum, password_);
+    }
+
+    window.addEventListener("DOMContentLoaded", () => {
+      const form = document.querySelector("form");
+      form.addEventListener("submit", (e) => {
+        e.preventDefault();
+        const input = document.querySelector("input[type='text']");
+        const orderNum = input.value;
+        if (orderNum) {
+          const currentParams = new URLSearchParams(window.location.search);
+          currentParams.set("order", orderNum);
+          window.location.search = currentParams.toString();
+        }
+      });
+
+      window.addEventListener("popstate", loadFromCacheOrFetch);
+      loadFromCacheOrFetch();
+
+      document.getElementById("reload-btn").addEventListener("click", async () => {
+        console.log("Reload button clicked.");
+        const params = new URLSearchParams(window.location.search);
+        const orderNum = params.get("order");
+        const password_ = params.get("pw") || "";
+
+        if (orderNum) {
+            const requestUrl = `${apiurl}mobile/get_order/${orderNum}`;
+            const request = new Request(requestUrl, {
+                headers: { "Content-Type": "application/json", password: password_ },
+            });
+
+            const cache = await caches.open(cacheName);
+            await cache.delete(request);
+        }
+        loadFromCacheOrFetch();
       });
     });
   </script>
