@@ -79,7 +79,9 @@
       <h1>桐陰祭2025</h1>
       <h2>食販呼び出し状況確認ページ</h2>
       <form>
-        <input type="text" placeholder="注文番号を入力してください" />
+        <input type="text" name="order" placeholder="注文番号を入力してください" />
+        <br />
+        <input type="password" name="pw" placeholder="パスワードを入力してください" style="margin-top: 10px;"/>
         <br />
         <button type="submit">送信</button>
       </form>
@@ -331,11 +333,12 @@
       const form = document.querySelector("form");
       form.addEventListener("submit", (e) => {
         e.preventDefault();
-        const input = document.querySelector("input[type='text']");
-        const orderNum = input.value;
+        const orderNum = form.elements["order"].value;
+        const password = form.elements["pw"].value;
         if (orderNum) {
           const currentParams = new URLSearchParams(window.location.search);
           currentParams.set("order", orderNum);
+          currentParams.set("pw", password);
           window.location.search = currentParams.toString();
         }
       });
