@@ -104,12 +104,18 @@
       </div>
       <div class="label">最終更新日時</div>
       <div id="last-updated" style="font-size: 1em; margin-bottom: 2em"></div>
+      <div id="cancellation-section" style="display: none;">
+        <div class="label">キャンセル予定</div>
+        <div id="cancellation-info" style="font-size: 1.2em; margin-bottom: 2em;"></div>
+      </div>
     </div>
   </body>
   <script>
     const apiurl_production = "https://api.yaakiyu.f5.si/";
     const apiurl_dev = "https://didactic-space-bassoon-r4wxv7xv79w4cj5g-80.app.github.dev/"
     let apiurl = apiurl_production;
+    let cancellationInterval;
+    let lastFullData = {};
 
     const classDatas = [
       {}, // 管理者用
@@ -206,16 +212,10 @@
       if (statusText === "呼び出し待ち") {
         // TODO: 待ち人数表示 data["wait_number"] を使う
         statusText = "呼び出し待ち";
-      } else if (statusText === "調理中") {
-        statusText = "調理中";
-      } else if (statusText === "提供待ち") {
-        statusText = "お渡しできます";
-      } else if (statusText === "完了") {
-        statusText = "お渡し済み";
       } else if (statusText === "キャンセル済み") {
         statusText = "キャンセル済み";
       } else {
-        statusText = "呼び出し中"; // 不明なステータスの場合
+        statusText = "呼び出し中";
       }
       document.querySelector(".status").innerText = statusText;
 
@@ -231,102 +231,150 @@
         }個<br/>`;
       }
       document.querySelector(".items").innerHTML = itemsHtml;
-    }
 
-    const cacheName = "order-cache";
+      // 既存のタイマーをクリア
+      if (cancellationInterval) {
+        clearInterval(cancellationInterval);
+      }
+      const cancellationSection = document.getElementById("cancellation-section");
+      if (data.status === "呼び出し中" && data.timestamp) {
+        cancellationSection.style.display = "block";
+        const cancellationInfo = document.getElementById("cancellation-info");
 
-    async function updateCache(orderNum, password_) {
-      const requestUrl = `${apiurl}mobile/get_order/${orderNum}`;
-      const request = new Request(requestUrl, {
-        headers: {
-          "Content-Type": "application/json",
-          password: password_,
-        },
-      });
+        // APIから返されるタイムスタンプをDateオブジェクトに変換
+        const lastUpdatedTime = new Date(data.timestamp * 1000);
 
-      try {
-        const reloadBtn = document.getElementById("reload-btn");
-        reloadBtn.disabled = true;
+        // キャンセル猶予時間
+        const cancellationTime = new Date(
+          lastUpdatedTime.getTime() + CANCELLATION_GRACE_MINUTES * 60 * 1000
+        );
 
-        const response = await fetch(request);
-        if (!response.ok) {
-          if (response.status === 404) {
-            alert("注文番号が見つかりません。");
-          } else if (response.status === 403) {
-            alert("パスワードが間違っています。");
-          } else {
-            const errorText = await response.text();
-            console.error("Error:", errorText);
-            alert("エラーが発生しました。しばらくしてから再試行してください。");
+        function updateCancellationTimer() {
+          const now = new Date();
+          const remainingMilliseconds = cancellationTime - now;
+
+          if (remainingMilliseconds <= 0) {
+            cancellationInfo.innerText = "キャンセル処理中です。";
+            clearInterval(cancellationInterval);
+            // ページをリロードしてステータスを更新
+            setTimeout(() => {
+                document.getElementById("reload-btn").click();
+            }, 2000);
+            return;
           }
-          reloadBtn.disabled = false; // エラー時はボタンを再度有効化
-          return null;
+
+          const remainingSeconds = Math.floor(remainingMilliseconds / 1000);
+          const minutes = Math.floor(remainingSeconds / 60);
+          const seconds = remainingSeconds % 60;
+
+          const cancellationTimeString = cancellationTime.toLocaleTimeString(
+            "ja-JP",
+            { hour: "2-digit", minute: "2-digit" }
+          );
+
+          cancellationInfo.innerText = `${cancellationTimeString} にキャンセル (あと${minutes}分${seconds
+            .toString()
+            .padStart(2, "0")}秒)`;
         }
 
-        const cache = await caches.open(cacheName);
-        await cache.put(request, response.clone()); // レスポンスをキャッシュに保存
-
-        const data = await response.json();
-        console.log("Success (from network):", data);
-        updateDisplay(data);
-        document.getElementById("last-updated").innerText = new Date().toLocaleString("ja-JP", { hour12: false });
-        
-        setTimeout(() => {
-            reloadBtn.disabled = false;
-        }, 10000); // 10秒後にボタンを有効化
-
-        return data;
-      } catch (error) {
-        console.error("Fetch error:", error);
-        alert("ネットワークエラーが発生しました。");
-        document.getElementById("reload-btn").disabled = false; // エラー時はボタンを再度有効化
-        return null;
+        updateCancellationTimer(); // まず一度呼び出す
+        cancellationInterval = setInterval(updateCancellationTimer, 1000); // 1秒ごとに更新
+      } else {
+        cancellationSection.style.display = "none";
       }
     }
 
-    async function loadFromCacheOrFetch() {
+    const THROTTLE_TIME = 10000; // アクセス抑制時間（ミリ秒）
+    const CANCELLATION_GRACE_MINUTES = 10; // キャンセル猶予時間（分）
+    const cacheName = "status-cache"; // キャッシュ名を変更
+
+    async function loadOrder() {
       const params = new URLSearchParams(window.location.search);
       const orderNum = params.get("order");
       const password_ = params.get("pw") || "";
 
-      if (!orderNum) {
-        document.getElementById("root").style.display = "block";
-        document.getElementById("status").style.display = "none";
-        return;
+      if (!orderNum) return;
+
+      const orderRequestUrl = `${apiurl}mobile/get_order/${orderNum}`;
+      try {
+        const orderResponse = await fetch(orderRequestUrl, { 
+          headers: { "Content-Type": "application/json", password: password_ }
+        });
+
+        if (!orderResponse.ok) {
+          if (orderResponse.status === 404) {
+            alert("注文番号が見つかりません。");
+          } else if (orderResponse.status === 403) {
+            alert("パスワードが間違っています。");
+          } else {
+            alert("注文情報の取得に失敗しました。");
+          }
+          return;
+        }
+        const orderData = await orderResponse.json();
+        lastFullData = orderData;
+        updateStatus(); // ステータス取得に進む
+      } catch (error) {
+        console.error("Fetch error on get_order:", error);
+        alert("ネットワークエラーが発生しました。");
       }
+    }
 
-      document.getElementById("root").style.display = "none";
-      document.getElementById("status").style.display = "block";
+    async function updateStatus() {
+      const reloadBtn = document.getElementById("reload-btn");
+      const params = new URLSearchParams(window.location.search);
+      const orderNum = params.get("order");
+      const password_ = params.get("pw") || "";
 
-      const requestUrl = `${apiurl}mobile/get_order/${orderNum}`;
-      const request = new Request(requestUrl, {
+      if (!orderNum) return;
+
+      const statusRequestUrl = `${apiurl}mobile/get_status/${orderNum}`;
+      const statusRequest = new Request(statusRequestUrl, {
         headers: { "Content-Type": "application/json", password: password_ },
       });
 
       const cache = await caches.open(cacheName);
-      const cachedResponse = await cache.match(request);
+      const cachedResponse = await cache.match(statusRequest);
+
+      let statusData;
 
       if (cachedResponse) {
         const cachedTime = new Date(cachedResponse.headers.get("date")).getTime();
         const now = Date.now();
-        document.getElementById("last-updated").innerText = new Date(cachedTime).toLocaleString("ja-JP", { hour12: false });
 
-        if (now - cachedTime < 10000) {
-          console.log("Request throttled. Loading from cache.");
-          const data = await cachedResponse.json();
-           if (data.id == orderNum) {
-              updateDisplay(data);
-              const reloadBtn = document.getElementById("reload-btn");
-              reloadBtn.disabled = true;
-              setTimeout(() => {
-                  reloadBtn.disabled = false;
-              }, 10000 - (now - cachedTime));
-              return; //キャッシュ表示したので終了
-           }
-        }
+        if (now - cachedTime < THROTTLE_TIME) { // 10秒以内ならキャッシュを使う
+          console.log("Loading status from cache.");
+          statusData = await cachedResponse.json();
+          reloadBtn.disabled = true;
+          setTimeout(() => { reloadBtn.disabled = false; }, THROTTLE_TIME - (now - cachedTime));
+        } 
       }
       
-      updateCache(orderNum, password_);
+      if (!statusData) { // キャッシュがないか、古い場合
+        console.log("Fetching status from network.");
+        try {
+          reloadBtn.disabled = true;
+          const networkResponse = await fetch(statusRequest);
+          if (networkResponse.ok) {
+            await cache.put(statusRequest, networkResponse.clone());
+            statusData = await networkResponse.json();
+            setTimeout(() => { reloadBtn.disabled = false; }, THROTTLE_TIME);
+          } else {
+            alert("ステータスの更新に失敗しました。");
+            reloadBtn.disabled = false;
+          }
+        } catch (error) {
+          console.error("Fetch error on get_status:", error);
+          alert("ネットワークエラーが発生しました。");
+          reloadBtn.disabled = false;
+        }
+      }
+
+      if (statusData) {
+        const displayData = { ...lastFullData, ...statusData };
+        updateDisplay(displayData);
+        document.getElementById("last-updated").innerText = new Date().toLocaleString("ja-JP", { hour12: false });
+      }
     }
 
     window.addEventListener("DOMContentLoaded", () => {
@@ -343,26 +391,21 @@
         }
       });
 
-      window.addEventListener("popstate", loadFromCacheOrFetch);
-      loadFromCacheOrFetch();
+      // 新しい処理フロー
+      const params = new URLSearchParams(window.location.search);
+      const orderNum = params.get("order");
 
-      document.getElementById("reload-btn").addEventListener("click", async () => {
-        console.log("Reload button clicked.");
-        const params = new URLSearchParams(window.location.search);
-        const orderNum = params.get("order");
-        const password_ = params.get("pw") || "";
+      if (orderNum) {
+        document.getElementById("root").style.display = "none";
+        document.getElementById("status").style.display = "block";
+        loadOrder();
+      } else {
+        document.getElementById("root").style.display = "block";
+        document.getElementById("status").style.display = "none";
+      }
 
-        if (orderNum) {
-            const requestUrl = `${apiurl}mobile/get_order/${orderNum}`;
-            const request = new Request(requestUrl, {
-                headers: { "Content-Type": "application/json", password: password_ },
-            });
-
-            const cache = await caches.open(cacheName);
-            await cache.delete(request);
-        }
-        loadFromCacheOrFetch();
-      });
+      document.getElementById("reload-btn").addEventListener("click", () => updateStatus());
+      window.addEventListener("popstate", () => location.reload());
     });
   </script>
 </html>
