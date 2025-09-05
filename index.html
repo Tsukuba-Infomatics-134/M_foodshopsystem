@@ -113,7 +113,7 @@
   <script>
     const apiurl_production = "https://api.yaakiyu.f5.si/";
     const apiurl_dev = "https://didactic-space-bassoon-r4wxv7xv79w4cj5g-80.app.github.dev/"
-    let apiurl = apiurl_production;
+    let apiurl = apiurl_dev;
     let cancellationInterval;
     let lastFullData = {};
 
@@ -210,8 +210,11 @@
       
       let statusText = data["status"];
       if (statusText === "呼び出し待ち") {
-        // TODO: 待ち人数表示 data["wait_number"] を使う
-        statusText = "呼び出し待ち";
+        if (data.wait_number !== undefined && data.wait_number !== null) {
+          statusText = `呼び出し待ち (${data.wait_number}人待ち)`;
+        } else {
+          statusText = "呼び出し待ち";
+        }
       } else if (statusText === "キャンセル済み") {
         statusText = "キャンセル済み";
       } else {
