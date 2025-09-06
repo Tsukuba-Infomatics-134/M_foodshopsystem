@@ -76,7 +76,7 @@
 
     <script>
     const apiurl_production = "https://api.yaakiyu.f5.si/";
-    const apiurl_dev = "http://localhost:80/"
+    const apiurl_dev = "http://localhost/"
     let apiurl = apiurl_production;
     let cancellationInterval;
     let lastFullData = {};
@@ -311,6 +311,7 @@
       const cachedResponse = await cache.match(statusRequest);
 
       let statusData;
+      let fromCache = false;
 
       if (cachedResponse) {
         const cachedTime = new Date(cachedResponse.headers.get("date")).getTime();
@@ -319,6 +320,7 @@
         if (now - cachedTime < THROTTLE_TIME) { // 10秒以内ならキャッシュを使う
           console.log("Loading status from cache.");
           statusData = await cachedResponse.json();
+          fromCache = true;
           reloadBtn.disabled = true;
           setTimeout(() => { reloadBtn.disabled = false; }, THROTTLE_TIME - (now - cachedTime));
         } 
@@ -347,11 +349,20 @@
       if (statusData) {
         const displayData = { ...lastFullData, ...statusData };
         updateDisplay(displayData);
-        document.getElementById("last-updated").innerText = new Date().toLocaleString("ja-JP", { hour12: false });
+        if (!fromCache) {
+          const nowString = new Date().toLocaleString("ja-JP", { hour12: false });
+          document.getElementById("last-updated").innerText = nowString;
+          localStorage.setItem("lastUpdated", nowString);
+        }
       }
     }
 
     window.addEventListener("DOMContentLoaded", () => {
+      const lastUpdated = localStorage.getItem("lastUpdated");
+      if (lastUpdated) {
+        document.getElementById("last-updated").innerText = lastUpdated;
+      }
+
       const form = document.querySelector("form");
       form.addEventListener("submit", (e) => {
         e.preventDefault();

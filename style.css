@@ -46,3 +46,9 @@ body {
 #cancellation-info {
     color: #dc3545;
 }
+
+#reload-btn:not(:disabled) {
+  background-color: #0d6efd; /* Bootstrap Primary Color */
+  border-color: #0d6efd;
+  color: white;
+}
